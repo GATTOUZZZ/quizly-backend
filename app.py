@@ -17,12 +17,18 @@ def generate_qa():
         line = line.strip()
         if ":" in line:
             parts = line.split(":", 1)
-            flashcards.append({"question": parts[0].strip(), "answer": parts[1].strip()})
+            flashcards.append({
+                "question": parts[0].strip(),
+                "answer": parts[1].strip()
+            })
         elif " is " in line.lower():
             idx = line.lower().index(" is ")
             q = "What is " + line[:idx].strip() + "?"
             a = line[idx+4:].strip()
-            flashcards.append({"question": q, "answer": a})
+            flashcards.append({
+                "question": q,
+                "answer": a
+            })
 
         if len(flashcards) >= max_cards:
             break
@@ -53,6 +59,7 @@ def generate_mcq():
             a = line[idx+4:].strip()
 
         if q and a:
+            # Collect possible distractors from other lines
             distractors = []
             for other in lines:
                 other = other.strip()
@@ -60,10 +67,13 @@ def generate_mcq():
                     wrong = other.split(":", 1)[1].strip()
                     if wrong and wrong != a:
                         distractors.append(wrong)
+
+            # Deduplicate and shuffle
             distractors = list(set(distractors))
             random.shuffle(distractors)
-            distractors = distractors[:3]
+            distractors = distractors[:3]  # pick up to 3
 
+            # Build options list
             options = [a] + distractors
             random.shuffle(options)
 
@@ -85,7 +95,12 @@ def generate_summary():
     data = request.get_json()
     text = data.get("text", "")
 
+    # Simple summarization: take first 3 sentences
     sentences = [s.strip() for s in text.split(".") if s.strip()]
-    summary = " ".join(sentences[:3])  # simple summary: first 3 sentences
+    summary = " ".join(sentences[:3])
 
     return jsonify({"summary": summary})
+
+
+if __name__ == "__main__":
+    app.run(host="0.0.0.0", port=5000)
