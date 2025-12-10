@@ -9,50 +9,13 @@ app = Flask(__name__)
 def generate_qa():
     data = request.get_json()
     text = data.get("text", "")
-    max_cards = data.get("maxCards", 12)  # default ~12 instead of 20
-
-    flashcards = []
-    lines = text.split("\n")
-
-    for line in lines:
-        line = line.strip()
-        if ":" in line:
-            parts = line.split(":", 1)
-            q, a = parts[0].strip(), parts[1].strip()
-        elif " is " in line.lower():
-            idx = line.lower().index(" is ")
-            q = "What is " + line[:idx].strip() + "?"
-            a = line[idx+4:].strip()
-        else:
-            continue
-
-        if q and a:
-            # Ensure answer ends cleanly
-            if not a.endswith((".", "?", "!", ";")):
-                a += "."
-            # Cap very long answers but keep whole words
-            words = a.split()
-            if len(words) > 30:
-                a = " ".join(words[:30]) + "..."
-            flashcards.append({"question": q, "answer": a})
-
-    # Limit to max_cards
-    flashcards = flashcards[:max_cards]
-
-    return jsonify({"flashcards": flashcards})
-
-
-# --- MCQ MODE ---
-@app.route("/generate-mcq", methods=["POST"])
-def generate_mcq():
-    data = request.get_json()
-    text = data.get("text", "")
     max_cards = data.get("maxCards", 12)  # default ~12
 
     flashcards = []
-    lines = text.split("\n")
+    # Split by sentences and newlines
+    sentences = re.split(r'(?<=[.!?])\s+|\n+', text)
 
-    for line in lines:
+    for line in sentences:
         line = line.strip()
         q, a = None, None
 
@@ -63,19 +26,68 @@ def generate_mcq():
             idx = line.lower().index(" is ")
             q = "What is " + line[:idx].strip() + "?"
             a = line[idx+4:].strip()
+        elif " are " in line.lower():
+            idx = line.lower().index(" are ")
+            q = "What are " + line[:idx].strip() + "?"
+            a = line[idx+5:].strip()
+        elif " means " in line.lower():
+            idx = line.lower().index(" means ")
+            q = "What does " + line[:idx].strip() + " mean?"
+            a = line[idx+7:].strip()
 
         if q and a:
-            # Ensure answer ends cleanly
             if not a.endswith((".", "?", "!", ";")):
                 a += "."
-            # Cap very long answers but keep whole words
+            words = a.split()
+            if len(words) > 30:
+                a = " ".join(words[:30]) + "..."
+            flashcards.append({"question": q, "answer": a})
+
+    # Slice at the end, don’t break early
+    flashcards = flashcards[:max_cards]
+    return jsonify({"flashcards": flashcards})
+
+
+# --- MCQ MODE ---
+@app.route("/generate-mcq", methods=["POST"])
+def generate_mcq():
+    data = request.get_json()
+    text = data.get("text", "")
+    max_cards = data.get("maxCards", 12)
+
+    flashcards = []
+    sentences = re.split(r'(?<=[.!?])\s+|\n+', text)
+
+    for line in sentences:
+        line = line.strip()
+        q, a = None, None
+
+        if ":" in line:
+            parts = line.split(":", 1)
+            q, a = parts[0].strip(), parts[1].strip()
+        elif " is " in line.lower():
+            idx = line.lower().index(" is ")
+            q = "What is " + line[:idx].strip() + "?"
+            a = line[idx+4:].strip()
+        elif " are " in line.lower():
+            idx = line.lower().index(" are ")
+            q = "What are " + line[:idx].strip() + "?"
+            a = line[idx+5:].strip()
+        elif " means " in line.lower():
+            idx = line.lower().index(" means ")
+            q = "What does " + line[:idx].strip() + " mean?"
+            a = line[idx+7:].strip()
+
+        if q and a:
+            if not a.endswith((".", "?", "!", ";")):
+                a += "."
             words = a.split()
             if len(words) > 30:
                 a = " ".join(words[:30]) + "..."
 
             # Collect distractors
             distractors = []
-            for other in lines:
+            for other in sentences:
                 other = other.strip()
                 if other and other != line and ":" in other:
                     wrong = other.split(":", 1)[1].strip()
@@ -100,13 +112,11 @@ def generate_mcq():
                 "options": options
             })
 
-    # Limit to max_cards
     flashcards = flashcards[:max_cards]
-
     return jsonify({"flashcards": flashcards})
 
 
-# --- SUMMARY MODE (already improved) ---
+# --- SUMMARY MODE (unchanged) ---
 @app.route("/generate-summary", methods=["POST"])
 def generate_summary():
     data = request.get_json()
