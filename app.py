@@ -98,17 +98,26 @@ def generate_summary():
     if not text.strip():
         return jsonify({"summary": ""})
 
-    # Split into sentences more reliably (handles ., ?, !, and newlines)
     import re
+    # Split into sentences using punctuation and newlines
     sentences = re.split(r'(?<=[.!?])\s+|\n+', text)
     sentences = [s.strip() for s in sentences if s.strip()]
 
-    # If text is short, just return it
-    if len(sentences) <= 3:
-        summary = " ".join(sentences)
-    else:
-        # Pick first 2–3 sentences as a "summary"
-        summary = " ".join(sentences[:3])
+    if not sentences:
+        return jsonify({"summary": ""})
+
+    # Score sentences: prefer longer ones with verbs/punctuation (more informative)
+    def score(s: str) -> float:
+        length = len(s.split())
+        verbs = len(re.findall(r"\b(is|are|was|were|has|have|does|do|did|can|could|should|shall|will|may|might)\b", s.lower()))
+        punctuation = len(re.findall(r"[,:;–-]", s))
+        return 0.5 * length + 0.3 * verbs + 0.2 * punctuation
+
+    ranked = sorted(sentences, key=score, reverse=True)
+
+    # Pick top 4–5 sentences
+    picked = ranked[:5]
+    summary = " ".join(picked)
 
     return jsonify({"summary": summary})
     
