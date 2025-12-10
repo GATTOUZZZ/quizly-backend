@@ -9,7 +9,7 @@ app = Flask(__name__)
 def generate_qa():
     data = request.get_json()
     text = data.get("text", "")
-    max_cards = data.get("maxCards", 12)  # default ~12
+    max_cards = data.get("maxCards", 15)  # default ~15
 
     flashcards = []
     # Split by sentences and newlines
@@ -19,21 +19,39 @@ def generate_qa():
         line = line.strip()
         q, a = None, None
 
+        # Colon definitions
         if ":" in line:
             parts = line.split(":", 1)
             q, a = parts[0].strip(), parts[1].strip()
+        # Hyphen definitions
+        elif " - " in line:
+            parts = line.split(" - ", 1)
+            q, a = parts[0].strip(), parts[1].strip()
+        # "is" statements
         elif " is " in line.lower():
             idx = line.lower().index(" is ")
             q = "What is " + line[:idx].strip() + "?"
             a = line[idx+4:].strip()
+        # "are" statements
         elif " are " in line.lower():
             idx = line.lower().index(" are ")
             q = "What are " + line[:idx].strip() + "?"
             a = line[idx+5:].strip()
+        # "means"
         elif " means " in line.lower():
             idx = line.lower().index(" means ")
             q = "What does " + line[:idx].strip() + " mean?"
             a = line[idx+7:].strip()
+        # "refers to"
+        elif " refers to " in line.lower():
+            idx = line.lower().index(" refers to ")
+            q = line[:idx].strip() + " refers to what?"
+            a = line[idx+10:].strip()
+        # "defined as"
+        elif " defined as " in line.lower():
+            idx = line.lower().index(" defined as ")
+            q = line[:idx].strip() + " is defined as what?"
+            a = line[idx+12:].strip()
 
         if q and a:
             if not a.endswith((".", "?", "!", ";")):
@@ -43,7 +61,6 @@ def generate_qa():
                 a = " ".join(words[:30]) + "..."
             flashcards.append({"question": q, "answer": a})
 
-    # Slice at the end, don’t break early
     flashcards = flashcards[:max_cards]
     return jsonify({"flashcards": flashcards})
 
@@ -53,7 +70,7 @@ def generate_qa():
 def generate_mcq():
     data = request.get_json()
     text = data.get("text", "")
-    max_cards = data.get("maxCards", 12)
+    max_cards = data.get("maxCards", 15)
 
     flashcards = []
     sentences = re.split(r'(?<=[.!?])\s+|\n+', text)
@@ -65,6 +82,9 @@ def generate_mcq():
         if ":" in line:
             parts = line.split(":", 1)
             q, a = parts[0].strip(), parts[1].strip()
+        elif " - " in line:
+            parts = line.split(" - ", 1)
+            q, a = parts[0].strip(), parts[1].strip()
         elif " is " in line.lower():
             idx = line.lower().index(" is ")
             q = "What is " + line[:idx].strip() + "?"
@@ -77,6 +97,14 @@ def generate_mcq():
             idx = line.lower().index(" means ")
             q = "What does " + line[:idx].strip() + " mean?"
             a = line[idx+7:].strip()
+        elif " refers to " in line.lower():
+            idx = line.lower().index(" refers to ")
+            q = line[:idx].strip() + " refers to what?"
+            a = line[idx+10:].strip()
+        elif " defined as " in line.lower():
+            idx = line.lower().index(" defined as ")
+            q = line[:idx].strip() + " is defined as what?"
+            a = line[idx+12:].strip()
 
         if q and a:
             if not a.endswith((".", "?", "!", ";")):
@@ -89,8 +117,8 @@ def generate_mcq():
             distractors = []
             for other in sentences:
                 other = other.strip()
-                if other and other != line and ":" in other:
-                    wrong = other.split(":", 1)[1].strip()
+                if other and other != line and (":" in other or " - " in other):
+                    wrong = other.split(":", 1)[-1].strip() if ":" in other else other.split(" - ", 1)[-1].strip()
                     if len(wrong.split()) >= 3 and wrong != a:
                         if not wrong.endswith((".", "?", "!", ";")):
                             wrong += "."
