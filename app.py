@@ -1,5 +1,6 @@
 from flask import Flask, request, jsonify
 import random
+import re
 
 app = Flask(__name__)
 
@@ -8,7 +9,7 @@ app = Flask(__name__)
 def generate_qa():
     data = request.get_json()
     text = data.get("text", "")
-    max_cards = data.get("maxCards", 20)
+    max_cards = data.get("maxCards", 12)  # default ~12 instead of 20
 
     flashcards = []
     lines = text.split("\n")
@@ -17,21 +18,26 @@ def generate_qa():
         line = line.strip()
         if ":" in line:
             parts = line.split(":", 1)
-            flashcards.append({
-                "question": parts[0].strip(),
-                "answer": parts[1].strip()
-            })
+            q, a = parts[0].strip(), parts[1].strip()
         elif " is " in line.lower():
             idx = line.lower().index(" is ")
             q = "What is " + line[:idx].strip() + "?"
             a = line[idx+4:].strip()
-            flashcards.append({
-                "question": q,
-                "answer": a
-            })
+        else:
+            continue
 
-        if len(flashcards) >= max_cards:
-            break
+        if q and a:
+            # Ensure answer ends cleanly
+            if not a.endswith((".", "?", "!", ";")):
+                a += "."
+            # Cap very long answers but keep whole words
+            words = a.split()
+            if len(words) > 30:
+                a = " ".join(words[:30]) + "..."
+            flashcards.append({"question": q, "answer": a})
+
+    # Limit to max_cards
+    flashcards = flashcards[:max_cards]
 
     return jsonify({"flashcards": flashcards})
 
@@ -41,7 +47,7 @@ def generate_qa():
 def generate_mcq():
     data = request.get_json()
     text = data.get("text", "")
-    max_cards = data.get("maxCards", 20)
+    max_cards = data.get("maxCards", 12)  # default ~12
 
     flashcards = []
     lines = text.split("\n")
@@ -59,21 +65,32 @@ def generate_mcq():
             a = line[idx+4:].strip()
 
         if q and a:
-            # Collect possible distractors from other lines
+            # Ensure answer ends cleanly
+            if not a.endswith((".", "?", "!", ";")):
+                a += "."
+            # Cap very long answers but keep whole words
+            words = a.split()
+            if len(words) > 30:
+                a = " ".join(words[:30]) + "..."
+
+            # Collect distractors
             distractors = []
             for other in lines:
                 other = other.strip()
                 if other and other != line and ":" in other:
                     wrong = other.split(":", 1)[1].strip()
-                    if wrong and wrong != a:
+                    if len(wrong.split()) >= 3 and wrong != a:
+                        if not wrong.endswith((".", "?", "!", ";")):
+                            wrong += "."
+                        words_wrong = wrong.split()
+                        if len(words_wrong) > 30:
+                            wrong = " ".join(words_wrong[:30]) + "..."
                         distractors.append(wrong)
 
-            # Deduplicate and shuffle
             distractors = list(set(distractors))
             random.shuffle(distractors)
-            distractors = distractors[:3]  # pick up to 3
+            distractors = distractors[:3]
 
-            # Build options list
             options = [a] + distractors
             random.shuffle(options)
 
@@ -83,13 +100,13 @@ def generate_mcq():
                 "options": options
             })
 
-        if len(flashcards) >= max_cards:
-            break
+    # Limit to max_cards
+    flashcards = flashcards[:max_cards]
 
     return jsonify({"flashcards": flashcards})
 
 
-# --- SUMMARY MODE ---
+# --- SUMMARY MODE (already improved) ---
 @app.route("/generate-summary", methods=["POST"])
 def generate_summary():
     data = request.get_json()
@@ -98,15 +115,12 @@ def generate_summary():
     if not text.strip():
         return jsonify({"summary": ""})
 
-    import re
-    # Split into sentences using punctuation and newlines
     sentences = re.split(r'(?<=[.!?])\s+|\n+', text)
     sentences = [s.strip() for s in sentences if s.strip()]
 
     if not sentences:
         return jsonify({"summary": ""})
 
-    # Score sentences: prefer longer ones with verbs/punctuation (more informative)
     def score(s: str) -> float:
         length = len(s.split())
         verbs = len(re.findall(r"\b(is|are|was|were|has|have|does|do|did|can|could|should|shall|will|may|might)\b", s.lower()))
@@ -114,12 +128,11 @@ def generate_summary():
         return 0.5 * length + 0.3 * verbs + 0.2 * punctuation
 
     ranked = sorted(sentences, key=score, reverse=True)
-
-    # Pick top 4–5 sentences
     picked = ranked[:5]
     summary = " ".join(picked)
 
     return jsonify({"summary": summary})
-    
+
+
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
