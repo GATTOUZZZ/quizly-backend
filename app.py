@@ -95,12 +95,22 @@ def generate_summary():
     data = request.get_json()
     text = data.get("text", "")
 
-    # Simple summarization: take first 3 sentences
-    sentences = [s.strip() for s in text.split(".") if s.strip()]
-    summary = " ".join(sentences[:3])
+    if not text.strip():
+        return jsonify({"summary": ""})
+
+    # Split into sentences more reliably (handles ., ?, !, and newlines)
+    import re
+    sentences = re.split(r'(?<=[.!?])\s+|\n+', text)
+    sentences = [s.strip() for s in sentences if s.strip()]
+
+    # If text is short, just return it
+    if len(sentences) <= 3:
+        summary = " ".join(sentences)
+    else:
+        # Pick first 2–3 sentences as a "summary"
+        summary = " ".join(sentences[:3])
 
     return jsonify({"summary": summary})
-
-
+    
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
