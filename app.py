@@ -48,13 +48,11 @@ def generate_qa():
         if q and a:
             if not a.endswith((".", "?", "!", ";")):
                 a += "."
-            words = a.split()
-            if len(words) > 30:
-                a = " ".join(words[:30]) + "..."
+            if len(a.split()) > 30:
+                a = " ".join(a.split()[:30]) + "..."
             flashcards.append({"question": q, "answer": a})
 
-    flashcards = flashcards[:max_cards]
-    return jsonify({"flashcards": flashcards})
+    return jsonify({"flashcards": flashcards[:max_cards]})
 
 
 # --- MCQ MODE ---
@@ -99,15 +97,13 @@ def generate_mcq():
             q = line[:idx].strip() + " is defined as what?"
             a = line[idx+12:].strip()
 
-        # Validate
         if q and a:
             if not a.endswith((".", "?", "!", ";")):
                 a += "."
-            words = a.split()
-            if len(words) > 30:
-                a = " ".join(words[:30]) + "..."
+            if len(a.split()) > 30:
+                a = " ".join(a.split()[:30]) + "..."
 
-            # Collect distractors from text
+            # Collect distractors
             distractors = []
             for other in sentences:
                 other = other.strip()
@@ -116,15 +112,13 @@ def generate_mcq():
                     if len(wrong.split()) >= 3 and wrong != a:
                         if not wrong.endswith((".", "?", "!", ";")):
                             wrong += "."
-                        words_wrong = wrong.split()
-                        if len(words_wrong) > 30:
-                            wrong = " ".join(words_wrong[:30]) + "..."
+                        if len(wrong.split()) > 30:
+                            wrong = " ".join(wrong.split()[:30]) + "..."
                         distractors.append(wrong)
 
-            # ✅ Fallback: generate random distractors if not enough
+            # ✅ Fallback: generate random distractors
             while len(distractors) < 3:
-                fake = "Incorrect alternative " + str(random.randint(100, 999))
-                distractors.append(fake)
+                distractors.append("Incorrect alternative " + str(random.randint(100, 999)))
 
             distractors = distractors[:3]
             options = [a] + distractors
@@ -136,8 +130,7 @@ def generate_mcq():
                 "options": options
             })
 
-    flashcards = flashcards[:max_cards]
-    return jsonify({"flashcards": flashcards})
+    return jsonify({"flashcards": flashcards[:max_cards]})
 
 
 # --- SUMMARY MODE ---
@@ -155,15 +148,14 @@ def generate_summary():
     if not sentences:
         return jsonify({"summary": ""})
 
-    def score(s: str) -> float:
+    def score(s):
         length = len(s.split())
         verbs = len(re.findall(r"\b(is|are|was|were|has|have|does|do|did|can|could|should|shall|will|may|might)\b", s.lower()))
         punctuation = len(re.findall(r"[,:;–-]", s))
         return 0.5 * length + 0.3 * verbs + 0.2 * punctuation
 
     ranked = sorted(sentences, key=score, reverse=True)
-    picked = ranked[:5]
-    summary = " ".join(picked)
+    summary = " ".join(ranked[:5])
 
     return jsonify({"summary": summary})
 
