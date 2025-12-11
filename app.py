@@ -55,7 +55,7 @@ def generate_qa():
     return jsonify({"flashcards": flashcards[:max_cards]})
 
 
-# --- MCQ MODE (NO OPENAI) ---
+# --- MCQ MODE ---
 @app.route("/generate-mcq", methods=["POST"])
 def generate_mcq():
     data = request.get_json()
@@ -103,7 +103,7 @@ def generate_mcq():
             if len(a.split()) > 30:
                 a = " ".join(a.split()[:30]) + "..."
 
-            # Collect distractors from text only
+            # Collect distractors
             distractors = []
             for other in sentences:
                 other = other.strip()
@@ -116,9 +116,7 @@ def generate_mcq():
                             wrong = " ".join(wrong.split()[:30]) + "..."
                         distractors.append(wrong)
 
-            distractors = list(dict.fromkeys(distractors))
-
-            # If fewer than 3, generate simple random ones
+            # ✅ Fallback: generate random distractors
             while len(distractors) < 3:
                 distractors.append("Incorrect alternative " + str(random.randint(100, 999)))
 
