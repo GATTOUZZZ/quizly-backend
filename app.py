@@ -9,67 +9,6 @@ app = Flask(__name__)
 def generate_qa():
     data = request.get_json()
     text = data.get("text", "")
-    max_cards = data.get("maxCards", 15)  # default ~15
-
-    flashcards = []
-    # Split by sentences and newlines
-    sentences = re.split(r'(?<=[.!?])\s+|\n+', text)
-
-    for line in sentences:
-        line = line.strip()
-        q, a = None, None
-
-        # Colon definitions
-        if ":" in line:
-            parts = line.split(":", 1)
-            q, a = parts[0].strip(), parts[1].strip()
-        # Hyphen definitions
-        elif " - " in line:
-            parts = line.split(" - ", 1)
-            q, a = parts[0].strip(), parts[1].strip()
-        # "is" statements
-        elif " is " in line.lower():
-            idx = line.lower().index(" is ")
-            q = "What is " + line[:idx].strip() + "?"
-            a = line[idx+4:].strip()
-        # "are" statements
-        elif " are " in line.lower():
-            idx = line.lower().index(" are ")
-            q = "What are " + line[:idx].strip() + "?"
-            a = line[idx+5:].strip()
-        # "means"
-        elif " means " in line.lower():
-            idx = line.lower().index(" means ")
-            q = "What does " + line[:idx].strip() + " mean?"
-            a = line[idx+7:].strip()
-        # "refers to"
-        elif " refers to " in line.lower():
-            idx = line.lower().index(" refers to ")
-            q = line[:idx].strip() + " refers to what?"
-            a = line[idx+10:].strip()
-        # "defined as"
-        elif " defined as " in line.lower():
-            idx = line.lower().index(" defined as ")
-            q = line[:idx].strip() + " is defined as what?"
-            a = line[idx+12:].strip()
-
-        if q and a:
-            if not a.endswith((".", "?", "!", ";")):
-                a += "."
-            words = a.split()
-            if len(words) > 30:
-                a = " ".join(words[:30]) + "..."
-            flashcards.append({"question": q, "answer": a})
-
-    flashcards = flashcards[:max_cards]
-    return jsonify({"flashcards": flashcards})
-
-
-# --- MCQ MODE ---
-@app.route("/generate-mcq", methods=["POST"])
-def generate_mcq():
-    data = request.get_json()
-    text = data.get("text", "")
     max_cards = data.get("maxCards", 15)
 
     flashcards = []
@@ -112,8 +51,63 @@ def generate_mcq():
             words = a.split()
             if len(words) > 30:
                 a = " ".join(words[:30]) + "..."
+            flashcards.append({"question": q, "answer": a})
 
-            # Collect distractors
+    flashcards = flashcards[:max_cards]
+    return jsonify({"flashcards": flashcards})
+
+
+# --- MCQ MODE ---
+@app.route("/generate-mcq", methods=["POST"])
+def generate_mcq():
+    data = request.get_json()
+    text = data.get("text", "")
+    max_cards = data.get("maxCards", 15)
+
+    flashcards = []
+    sentences = re.split(r'(?<=[.!?])\s+|\n+', text)
+
+    for line in sentences:
+        line = line.strip()
+        q, a = None, None
+
+        # Extract Q/A
+        if ":" in line:
+            parts = line.split(":", 1)
+            q, a = parts[0].strip(), parts[1].strip()
+        elif " - " in line:
+            parts = line.split(" - ", 1)
+            q, a = parts[0].strip(), parts[1].strip()
+        elif " is " in line.lower():
+            idx = line.lower().index(" is ")
+            q = "What is " + line[:idx].strip() + "?"
+            a = line[idx+4:].strip()
+        elif " are " in line.lower():
+            idx = line.lower().index(" are ")
+            q = "What are " + line[:idx].strip() + "?"
+            a = line[idx+5:].strip()
+        elif " means " in line.lower():
+            idx = line.lower().index(" means ")
+            q = "What does " + line[:idx].strip() + " mean?"
+            a = line[idx+7:].strip()
+        elif " refers to " in line.lower():
+            idx = line.lower().index(" refers to ")
+            q = line[:idx].strip() + " refers to what?"
+            a = line[idx+10:].strip()
+        elif " defined as " in line.lower():
+            idx = line.lower().index(" defined as ")
+            q = line[:idx].strip() + " is defined as what?"
+            a = line[idx+12:].strip()
+
+        # Validate
+        if q and a:
+            if not a.endswith((".", "?", "!", ";")):
+                a += "."
+            words = a.split()
+            if len(words) > 30:
+                a = " ".join(words[:30]) + "..."
+
+            # Collect distractors from text
             distractors = []
             for other in sentences:
                 other = other.strip()
@@ -127,10 +121,12 @@ def generate_mcq():
                             wrong = " ".join(words_wrong[:30]) + "..."
                         distractors.append(wrong)
 
-            distractors = list(set(distractors))
-            random.shuffle(distractors)
-            distractors = distractors[:3]
+            # ✅ Fallback: generate random distractors if not enough
+            while len(distractors) < 3:
+                fake = "Incorrect alternative " + str(random.randint(100, 999))
+                distractors.append(fake)
 
+            distractors = distractors[:3]
             options = [a] + distractors
             random.shuffle(options)
 
@@ -144,7 +140,7 @@ def generate_mcq():
     return jsonify({"flashcards": flashcards})
 
 
-# --- SUMMARY MODE (unchanged) ---
+# --- SUMMARY MODE ---
 @app.route("/generate-summary", methods=["POST"])
 def generate_summary():
     data = request.get_json()
