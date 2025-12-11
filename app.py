@@ -9,17 +9,14 @@ app = Flask(__name__)
 # --- OpenAI client (reads your API key from environment variable) ---
 client = OpenAI(
     api_key=os.getenv("OPENAI_API_KEY"),
-    timeout=30  # seconds
+    timeout=20  # shorter timeout to avoid worker hang
 )
-
 
 # --- AI DISTRACTOR GENERATOR ---
 def generate_ai_distractors(question: str, correct_answer: str, n: int = 3):
-    """
-    Generate n believable incorrect alternatives using OpenAI.
-    Returns a list of distractors.
-    """
     try:
+        print("Calling OpenAI for:", question)
+
         prompt = f"""
 Generate {n} incorrect but believable alternatives for this MCQ.
 
@@ -40,15 +37,17 @@ Rules:
                 {"role": "user", "content": prompt}
             ],
             temperature=0.8,
-            max_tokens=150,
+            max_tokens=50,  # reduced for speed + memory
+            stream=False
         )
 
         raw = response.choices[0].message.content.strip()
         distractors = [line.strip("-• ").strip() for line in raw.split("\n") if line.strip()]
         return distractors[:n]
 
-    except Exception:
-        return []
+    except Exception as e:
+        print("OpenAI error:", e)
+        return ["Alternative A", "Alternative B", "Alternative C"]  # safe fallback
 
 
 # --- Q&A MODE ---
@@ -169,12 +168,7 @@ def generate_mcq():
             if len(distractors) < 3:
                 needed = 3 - len(distractors)
                 ai_distractors = generate_ai_distractors(q, a, n=needed)
-
-                ai_distractors = [
-                    d for d in ai_distractors
-                    if d.lower() != a.lower()
-                ]
-
+                ai_distractors = [d for d in ai_distractors if d.lower() != a.lower()]
                 distractors.extend(ai_distractors)
 
             # 3) Final fallback
