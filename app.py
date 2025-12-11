@@ -1,8 +1,52 @@
 from flask import Flask, request, jsonify
 import random
 import re
+import os
+from openai import OpenAI
 
 app = Flask(__name__)
+
+# --- OpenAI client (reads your API key from environment variable) ---
+client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+
+
+# --- AI DISTRACTOR GENERATOR ---
+def generate_ai_distractors(question: str, correct_answer: str, n: int = 3):
+    """
+    Generate n believable incorrect alternatives using OpenAI.
+    Returns a list of distractors.
+    """
+    try:
+        prompt = f"""
+Generate {n} incorrect but believable alternatives for this MCQ.
+
+Question: {question}
+Correct answer: {correct_answer}
+
+Rules:
+- Must be plausible but NOT correct.
+- Must be short (max 7 words).
+- No numbering, no bullets.
+- One distractor per line.
+"""
+
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You generate MCQ distractors."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.8,
+            max_tokens=150,
+        )
+
+        raw = response.choices[0].message.content.strip()
+        distractors = [line.strip("-• ").strip() for line in raw.split("\n") if line.strip()]
+        return distractors[:n]
+
+    except Exception:
+        return []
+
 
 # --- Q&A MODE ---
 @app.route("/generate-qa", methods=["POST"])
@@ -103,7 +147,7 @@ def generate_mcq():
             if len(a.split()) > 30:
                 a = " ".join(a.split()[:30]) + "..."
 
-            # Collect distractors
+            # 1) Collect distractors from text
             distractors = []
             for other in sentences:
                 other = other.strip()
@@ -116,7 +160,21 @@ def generate_mcq():
                             wrong = " ".join(wrong.split()[:30]) + "..."
                         distractors.append(wrong)
 
-            # ✅ Fallback: generate random distractors
+            distractors = list(dict.fromkeys(distractors))
+
+            # 2) If fewer than 3 distractors, call OpenAI
+            if len(distractors) < 3:
+                needed = 3 - len(distractors)
+                ai_distractors = generate_ai_distractors(q, a, n=needed)
+
+                ai_distractors = [
+                    d for d in ai_distractors
+                    if d.lower() != a.lower()
+                ]
+
+                distractors.extend(ai_distractors)
+
+            # 3) Final fallback
             while len(distractors) < 3:
                 distractors.append("Incorrect alternative " + str(random.randint(100, 999)))
 
