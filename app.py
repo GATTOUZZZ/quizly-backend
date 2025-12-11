@@ -52,6 +52,8 @@ def generate_qa():
                 a = " ".join(a.split()[:30]) + "..."
             flashcards.append({"question": q, "answer": a})
 
+    print("DEBUG QA FLASHCARDS:", flashcards)
+    
     return jsonify({"flashcards": flashcards[:max_cards]})
 
 
