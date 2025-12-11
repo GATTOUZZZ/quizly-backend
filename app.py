@@ -7,7 +7,10 @@ from openai import OpenAI
 app = Flask(__name__)
 
 # --- OpenAI client (reads your API key from environment variable) ---
-client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
+client = OpenAI(
+    api_key=os.getenv("OPENAI_API_KEY"),
+    timeout=30  # seconds
+)
 
 
 # --- AI DISTRACTOR GENERATOR ---
